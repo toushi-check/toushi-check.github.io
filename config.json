@@ -1,7 +1,7 @@
 {
   "site_name": "投資業者チェック",
   "site_tagline": "金融庁の無登録業者リストを、業者名・サービス名で調べられます",
-  "base_url": "https://example.com",
+  "base_url": "https://toushi-check.github.io",
   "source_url": "https://www.fsa.go.jp/ordinary/chuui/mutouroku/04.html",
   "source_page_url": "https://www.fsa.go.jp/ordinary/chuui/mutouroku.html",
   "max_x_posts_per_run": 5,
