@@ -34,7 +34,7 @@ jobs:
         run: python scripts/fetch_fsa.py
 
       - name: サイトを生成
-        run: python scripts/build_site.py
+        run: python scripts/build_site.py && (cp google*.html site/ || true)
 
       - name: データを保存(コミット)
         run: |
