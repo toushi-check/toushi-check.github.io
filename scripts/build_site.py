@@ -18,6 +18,9 @@ SITE = ROOT / "site"
 ASSETS = ROOT / "templates"
 JST = dt.timezone(dt.timedelta(hours=9))
 
+# 金融庁リストから消えた業者のページを残す日数(過ぎたらページ自体を作らない)
+REMOVED_KEEP_DAYS = 180
+
 E = html.escape
 
 # 金融庁の「内容」欄の言葉 -> 一般向けの説明
@@ -60,15 +63,16 @@ def explain(c: dict) -> list:
     return [desc for key, desc in CATEGORY_HELP if key in text]
 
 
-def layout(cfg: dict, title: str, desc: str, path: str, body: str, depth: int) -> str:
+def layout(cfg: dict, title: str, desc: str, path: str, body: str, depth: int, noindex: bool = False) -> str:
     rel = "../" * depth
+    robots = '<meta name="robots" content="noindex,follow">\n' if noindex else ""
     canonical = cfg["base_url"].rstrip("/") + path
     return f"""<!doctype html>
 <html lang="ja"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{E(title)}</title>
 <meta name="description" content="{E(desc)}">
-<link rel="canonical" href="{E(canonical)}">
+{robots}<link rel="canonical" href="{E(canonical)}">
 <meta property="og:title" content="{E(title)}"><meta property="og:description" content="{E(desc)}">
 <meta property="og:type" content="website"><meta property="og:url" content="{E(canonical)}">
 <link rel="stylesheet" href="{rel}style.css">
@@ -98,9 +102,11 @@ def company_page(cfg: dict, c: dict, related: list, fetched: str) -> str:
                    f'実在する「{E(imp)}」とは無関係です。</div>')
 
     removed = ""
+    lead = (f'<p class="lead">この業者は、金融庁が公表している<strong>「無登録で金融商品取引業を行う者」のリスト</strong>に掲載されています({E(listed)}掲載)。</p>')
     if c.get("removed"):
-        removed = (f'<div class="notice">この業者は、{E(c["removed"])}時点で金融庁の公表リストから確認できなくなりました。'
-                   "過去に掲載されていた事実として情報を残しています。</div>")
+        removed = (f'<div class="notice"><strong>掲載終了:</strong>この業者は、{E(c["removed"])}時点で金融庁の公表リストから確認できなくなりました。'
+                   "現在の状況は金融庁のページでご確認ください。このページは一定期間後に削除されます。</div>")
+        lead = (f'<p class="lead">この業者は、金融庁が公表している<strong>「無登録で金融商品取引業を行う者」のリスト</strong>に掲載されていました({E(listed)}掲載)。</p>')
 
     rows = [
         ("名称", c["name"]),
@@ -119,7 +125,7 @@ def company_page(cfg: dict, c: dict, related: list, fetched: str) -> str:
 <nav class="crumb"><a href="../../">トップ</a> › 業者情報</nav>
 <h1>{E(name)}</h1>
 {f'<p class="sub">サービス名:{E(services)}</p>' if services else ''}
-<p class="lead">この業者は、金融庁が公表している<strong>「無登録で金融商品取引業を行う者」のリスト</strong>に掲載されています({E(listed)}掲載)。</p>
+{lead}
 {imp_box}{removed}
 <table class="info">{table}</table>
 <h2>どういう意味?</h2>
@@ -136,7 +142,7 @@ def company_page(cfg: dict, c: dict, related: list, fetched: str) -> str:
 {f'<h2>同じ種類の掲載業者</h2><ul class="related">{rel_html}</ul>' if rel_html else ''}
 <p class="small">掲載情報は金融庁の公表内容(最終確認:{E(fetched)})に基づきます。本ページは業者が詐欺であると断定するものではありません。最新情報は必ず<a href="{E(cfg['source_page_url'])}" rel="nofollow noopener">金融庁のページ</a>でご確認ください。</p>
 """
-    return layout(cfg, title, desc, f"/c/{c['id']}/", body, depth=2)
+    return layout(cfg, title, desc, f"/c/{c['id']}/", body, depth=2, noindex=bool(c.get("removed")))
 
 
 def index_page(cfg: dict, companies: list, fetched: str) -> str:
@@ -146,6 +152,7 @@ def index_page(cfg: dict, companies: list, fetched: str) -> str:
     latest = "".join(
         f'<li><a href="c/{E(c["id"])}/">{E(display_name(c))}</a> <span class="meta">{E(ym_label(c.get("listed_ym"), c.get("listed")))}・{E(c.get("region", ""))}</span></li>'
         for c in items[:20])
+    data_json = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
     body = f"""
 <h1>{E(cfg['site_name'])}</h1>
 <p class="lead">{E(cfg['site_tagline'])}。勧誘してきた業者の名前やサービス名を入れてください。</p>
@@ -156,7 +163,7 @@ def index_page(cfg: dict, companies: list, fetched: str) -> str:
 <ul class="related">{latest}</ul>
 <p class="small">掲載件数:{len(companies)}件/最終確認:{E(fetched)}<br>
 ここに無いからといって、安全な業者とは限りません。金融庁が把握していない業者も多数あります。</p>
-<script id="d" type="application/json">{json.dumps(data, ensure_ascii=False).replace("</", "<\\/")}</script>
+<script id="d" type="application/json">{data_json}</script>
 <script>
 const D=JSON.parse(document.getElementById('d').textContent);
 const norm=s=>s.normalize('NFKC').toLowerCase().replace(/\\s+/g,'');
@@ -202,11 +209,22 @@ def related_for(c: dict, companies: list, n: int = 6) -> list:
     return pool[:n]
 
 
+def removed_expired(c: dict, today: dt.date) -> bool:
+    try:
+        return (today - dt.date.fromisoformat(c["removed"])).days > REMOVED_KEEP_DAYS
+    except (KeyError, ValueError):
+        return False
+
+
 def main():
     cfg = load_config()
-    companies = read_json(COMPANIES_JSON, default=[])
-    if not companies:
+    all_companies = read_json(COMPANIES_JSON, default=[])
+    if not all_companies:
         raise SystemExit("data/companies.json がありません。先に fetch_fsa.py を実行してください。")
+    today = dt.datetime.now(JST).date()
+    # 掲載中の業者 / 掲載終了(ページは残すが検索・一覧・sitemapから外す) / 期限切れ(ページを作らない)
+    active = [c for c in all_companies if not c.get("removed")]
+    ended = [c for c in all_companies if c.get("removed") and not removed_expired(c, today)]
     meta = read_json(META_JSON, default={}) or {}
     fetched = (meta.get("fetched_at") or "")[:10]
 
@@ -215,22 +233,22 @@ def main():
     (SITE / "c").mkdir(parents=True)
     shutil.copy(ASSETS / "style.css", SITE / "style.css")
 
-    (SITE / "index.html").write_text(index_page(cfg, companies, fetched), encoding="utf-8")
+    (SITE / "index.html").write_text(index_page(cfg, active, fetched), encoding="utf-8")
     (SITE / "about").mkdir()
     (SITE / "about" / "index.html").write_text(about_page(cfg), encoding="utf-8")
 
-    for c in companies:
+    for c in active + ended:
         d = SITE / "c" / c["id"]
         d.mkdir()
-        (d / "index.html").write_text(company_page(cfg, c, related_for(c, companies), fetched), encoding="utf-8")
+        (d / "index.html").write_text(company_page(cfg, c, related_for(c, active), fetched), encoding="utf-8")
 
     base = cfg["base_url"].rstrip("/")
-    urls = [f"{base}/", f"{base}/about/"] + [f"{base}/c/{c['id']}/" for c in companies]
+    urls = [f"{base}/", f"{base}/about/"] + [f"{base}/c/{c['id']}/" for c in active]
     (SITE / "sitemap.xml").write_text(
         '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
         + "".join(f"<url><loc>{E(u)}</loc></url>\n" for u in urls) + "</urlset>\n", encoding="utf-8")
     (SITE / "robots.txt").write_text(f"User-agent: *\nAllow: /\nSitemap: {base}/sitemap.xml\n", encoding="utf-8")
-    print(f"サイト生成完了: 業者ページ {len(companies)} 件 -> site/")
+    print(f"サイト生成完了: 掲載中 {len(active)} 件 / 掲載終了 {len(ended)} 件 -> site/")
 
 
 if __name__ == "__main__":
