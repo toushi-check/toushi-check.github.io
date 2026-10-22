@@ -21,6 +21,8 @@ JST = dt.timezone(dt.timedelta(hours=9))
 # 金融庁リストから消えた業者のページを残す日数(過ぎたらページ自体を作らない)
 REMOVED_KEEP_DAYS = 180
 
+GUIDES_FOR_COMPANY: list = []  # 業者ページに出す関連記事(main で設定)
+
 E = html.escape
 
 # 金融庁の「内容」欄の言葉 -> 一般向けの説明
@@ -34,7 +36,7 @@ CATEGORY_HELP = [
 ]
 
 CONTACTS = [
-    ("金融庁 金融サービス利用者相談室", "0570-016811", "無登録業者・投資の勧誘についての相談"),
+    ("金融庁「詐欺的な投資に関する相談ダイヤル」", "0570-050588", "怪しい投資の勧誘・無登録業者についての相談(平日10時〜17時/IP電話からは03-6206-6066)"),
     ("消費者ホットライン", "188", "最寄りの消費生活センターにつながります"),
     ("警察相談専用電話", "#9110", "被害に遭った・お金を振り込んでしまった場合"),
 ]
@@ -61,6 +63,116 @@ def ym_label(ym: str, raw: str) -> str:
 def explain(c: dict) -> list:
     text = c.get("business", "") + c.get("name", "")
     return [desc for key, desc in CATEGORY_HELP if key in text]
+
+
+GUIDES_DIR = ROOT / "guides"
+
+
+def inline_md(text: str) -> str:
+    """**太字** と [文字](URL) だけを扱う。それ以外はエスケープ。"""
+    out, pos = [], 0
+    for m in re.finditer(r"\*\*(.+?)\*\*|\[([^\]]+)\]\(([^)\s]+)\)", text):
+        out.append(E(text[pos:m.start()]))
+        if m.group(1) is not None:
+            out.append(f"<strong>{E(m.group(1))}</strong>")
+        else:
+            url = m.group(3)
+            ext = ' rel="nofollow noopener"' if url.startswith("http") else ""
+            out.append(f'<a href="{E(url)}"{ext}>{E(m.group(2))}</a>')
+        pos = m.end()
+    out.append(E(text[pos:]))
+    return "".join(out)
+
+
+def md_to_html(md: str, blocks: dict) -> str:
+    """見出し(##)・箇条書き(- / 1.)・段落・差し込み({{名前}})だけの簡易変換。"""
+    html_out, para, lst = [], [], None
+
+    def flush():
+        nonlocal para, lst
+        if para:
+            html_out.append(f"<p>{inline_md(' '.join(para))}</p>")
+            para = []
+        if lst:
+            tag, items = lst
+            html_out.append(f"<{tag}>" + "".join(f"<li>{inline_md(i)}</li>" for i in items) + f"</{tag}>")
+            lst = None
+
+    for raw in md.splitlines():
+        line = raw.rstrip()
+        sub = raw.startswith("   ") and line.strip().startswith("- ")
+        if sub and lst:  # 一段下げた箇条書きは、直前の項目に続けて書く
+            lst[1][-1] += "(" + line.strip()[2:] + ")"
+            continue
+        line = line.strip()
+        if not line:
+            flush()
+        elif line.startswith("{{") and line.endswith("}}"):
+            flush()
+            html_out.append(blocks.get(line[2:-2].strip(), ""))
+        elif line.startswith("## "):
+            flush()
+            html_out.append(f"<h2>{inline_md(line[3:])}</h2>")
+        elif line.startswith("- ") or re.match(r"\d+\. ", line):
+            tag = "ul" if line.startswith("- ") else "ol"
+            item = line[2:] if tag == "ul" else line.split(". ", 1)[1]
+            if para:
+                flush()
+            if lst and lst[0] != tag:
+                flush()
+            if not lst:
+                lst = (tag, [])
+            lst[1].append(item)
+        else:
+            if lst:
+                flush()
+            para.append(line)
+    flush()
+    return "\n".join(html_out)
+
+
+def load_guides() -> list:
+    guides = []
+    if not GUIDES_DIR.exists():
+        return guides
+    for f in sorted(GUIDES_DIR.glob("*.md")):
+        head, _, body = f.read_text(encoding="utf-8").partition("\n---\n")
+        meta = dict(line.split(":", 1) for line in head.splitlines() if ":" in line)
+        slug = re.sub(r"^\d+-", "", f.stem)
+        guides.append({"slug": slug, "title": meta.get("title", slug).strip(),
+                       "description": meta.get("description", "").strip(), "body": body})
+    return guides
+
+
+def contacts_html() -> str:
+    items = "".join(f"<li><strong>{E(n)}</strong>:<a href=\"tel:{E(t)}\">{E(t)}</a><br><span>{E(d)}</span></li>" for n, t, d in CONTACTS)
+    return f'<h2>相談先</h2><ul class="contacts">{items}</ul>'
+
+
+def guide_page(cfg: dict, g: dict, guides: list) -> str:
+    search = ('<div class="notice">勧誘してきた業者の名前やサービス名が分かる場合は、'
+              '<a href="../../">このサイトのトップページ</a>で、金融庁の無登録業者リストに掲載がないか検索できます。</div>')
+    others = "".join(f'<li><a href="../{E(o["slug"])}/">{E(o["title"])}</a></li>' for o in guides if o["slug"] != g["slug"])
+    body = f"""
+<nav class="crumb"><a href="../../">トップ</a> › <a href="../">よくある相談</a></nav>
+<h1>{E(g['title'])}</h1>
+{md_to_html(g['body'], {"contacts": contacts_html(), "search": search})}
+<h2>ほかの記事</h2>
+<ul class="related">{others}</ul>
+<p class="small">本記事は金融庁・警察庁などの公表情報をもとに作成した一般的な情報です。個別の業者が詐欺であると断定するものではありません。本サイトは公的機関とは関係がなく、被害回復や返金の代行・紹介は行っていません。</p>
+"""
+    return layout(cfg, f"{g['title']}|{cfg['site_name']}", g["description"], f"/guide/{g['slug']}/", body, depth=2)
+
+
+def guide_index(cfg: dict, guides: list) -> str:
+    items = "".join(f'<li><a href="{E(g["slug"])}/">{E(g["title"])}</a><br><span class="meta">{E(g["description"])}</span></li>' for g in guides)
+    body = f"""
+<nav class="crumb"><a href="../">トップ</a> › よくある相談</nav>
+<h1>よくある相談</h1>
+<p class="lead">投資の勧誘や出金トラブルで、よくある相談と対処法をまとめています。</p>
+<ul class="related">{items}</ul>
+"""
+    return layout(cfg, f"よくある相談|{cfg['site_name']}", "投資の勧誘・出金トラブル・二次被害など、よくある相談と対処法。", "/guide/", body, depth=1)
 
 
 def layout(cfg: dict, title: str, desc: str, path: str, body: str, depth: int, noindex: bool = False) -> str:
@@ -118,7 +230,7 @@ def company_page(cfg: dict, c: dict, related: list, fetched: str) -> str:
     ]
     table = "".join(f"<tr><th>{E(k)}</th><td>{E(v)}</td></tr>" for k, v in rows)
     help_html = "".join(f"<p>{E(t)}</p>" for t in explain(c)) or "<p>金融商品取引業の登録を受けずに業務を行っていたとして、金融庁が公表しています。</p>"
-    contacts = "".join(f"<li><strong>{E(n)}</strong>:<a href=\"tel:{E(t)}\">{E(t)}</a><br><span>{E(d)}</span></li>" for n, t, d in CONTACTS)
+    guide_links = "".join(f'<li><a href="../../guide/{E(g["slug"])}/">{E(g["title"])}</a></li>' for g in GUIDES_FOR_COMPANY)
     rel_html = "".join(f'<li><a href="../{E(r["id"])}/">{E(display_name(r))}</a></li>' for r in related)
 
     body = f"""
@@ -137,21 +249,22 @@ def company_page(cfg: dict, c: dict, related: list, fetched: str) -> str:
 <li>「出金するには手数料・税金を先に払って」と言われたら、払わずに相談する</li>
 <li>「被害を取り戻せる」と持ちかける業者は、二次被害の可能性があります</li>
 </ul>
-<h2>相談先</h2>
-<ul class="contacts">{contacts}</ul>
+{contacts_html()}
+{f'<h2>関連する記事</h2><ul class="related">{guide_links}</ul>' if guide_links else ''}
 {f'<h2>同じ種類の掲載業者</h2><ul class="related">{rel_html}</ul>' if rel_html else ''}
 <p class="small">掲載情報は金融庁の公表内容(最終確認:{E(fetched)})に基づきます。本ページは業者が詐欺であると断定するものではありません。最新情報は必ず<a href="{E(cfg['source_page_url'])}" rel="nofollow noopener">金融庁のページ</a>でご確認ください。</p>
 """
     return layout(cfg, title, desc, f"/c/{c['id']}/", body, depth=2, noindex=bool(c.get("removed")))
 
 
-def index_page(cfg: dict, companies: list, fetched: str) -> str:
+def index_page(cfg: dict, companies: list, fetched: str, guides: list) -> str:
     items = sorted(companies, key=lambda c: (c.get("listed_ym") or "", c["first_seen"]), reverse=True)
     data = [{"i": c["id"], "n": display_name(c), "s": " ".join(c.get("services") or []),
              "r": c.get("region", ""), "l": ym_label(c.get("listed_ym"), c.get("listed"))} for c in items]
     latest = "".join(
         f'<li><a href="c/{E(c["id"])}/">{E(display_name(c))}</a> <span class="meta">{E(ym_label(c.get("listed_ym"), c.get("listed")))}・{E(c.get("region", ""))}</span></li>'
         for c in items[:20])
+    guide_items = "".join(f'<li><a href="guide/{E(g["slug"])}/">{E(g["title"])}</a></li>' for g in guides)
     data_json = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
     body = f"""
 <h1>{E(cfg['site_name'])}</h1>
@@ -159,6 +272,8 @@ def index_page(cfg: dict, companies: list, fetched: str) -> str:
 <input id="q" type="search" placeholder="業者名・サービス名(例:Babafx)" autocomplete="off">
 <p id="count" class="small"></p>
 <ul id="results" class="results"></ul>
+<h2>よくある相談</h2>
+<ul class="related">{guide_items}</ul>
 <h2>最近掲載された業者</h2>
 <ul class="related">{latest}</ul>
 <p class="small">掲載件数:{len(companies)}件/最終確認:{E(fetched)}<br>
@@ -233,7 +348,16 @@ def main():
     (SITE / "c").mkdir(parents=True)
     shutil.copy(ASSETS / "style.css", SITE / "style.css")
 
-    (SITE / "index.html").write_text(index_page(cfg, active, fetched), encoding="utf-8")
+    guides = load_guides()
+    global GUIDES_FOR_COMPANY
+    GUIDES_FOR_COMPANY = [g for g in guides if g["slug"] in ("mutouroku-toha", "shukkin-kyohi", "nijihigai", "touroku-kakunin")]
+    (SITE / "index.html").write_text(index_page(cfg, active, fetched, guides), encoding="utf-8")
+    if guides:
+        (SITE / "guide").mkdir()
+        (SITE / "guide" / "index.html").write_text(guide_index(cfg, guides), encoding="utf-8")
+        for g in guides:
+            (SITE / "guide" / g["slug"]).mkdir()
+            (SITE / "guide" / g["slug"] / "index.html").write_text(guide_page(cfg, g, guides), encoding="utf-8")
     (SITE / "about").mkdir()
     (SITE / "about" / "index.html").write_text(about_page(cfg), encoding="utf-8")
 
@@ -243,12 +367,12 @@ def main():
         (d / "index.html").write_text(company_page(cfg, c, related_for(c, active), fetched), encoding="utf-8")
 
     base = cfg["base_url"].rstrip("/")
-    urls = [f"{base}/", f"{base}/about/"] + [f"{base}/c/{c['id']}/" for c in active]
+    urls = [f"{base}/", f"{base}/about/"] + ([f"{base}/guide/"] if guides else []) + [f"{base}/guide/{g['slug']}/" for g in guides] + [f"{base}/c/{c['id']}/" for c in active]
     (SITE / "sitemap.xml").write_text(
         '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
         + "".join(f"<url><loc>{E(u)}</loc></url>\n" for u in urls) + "</urlset>\n", encoding="utf-8")
     (SITE / "robots.txt").write_text(f"User-agent: *\nAllow: /\nSitemap: {base}/sitemap.xml\n", encoding="utf-8")
-    print(f"サイト生成完了: 掲載中 {len(active)} 件 / 掲載終了 {len(ended)} 件 -> site/")
+    print(f"サイト生成完了: 掲載中 {len(active)} 件 / 掲載終了 {len(ended)} 件 / 記事 {len(guides)} 本 -> site/")
 
 
 if __name__ == "__main__":
