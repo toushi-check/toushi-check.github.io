@@ -175,6 +175,48 @@ def guide_index(cfg: dict, guides: list) -> str:
     return layout(cfg, f"よくある相談|{cfg['site_name']}", "投資の勧誘・出金トラブル・二次被害など、よくある相談と対処法。", "/guide/", body, depth=1)
 
 
+def year_of(c: dict) -> str:
+    ym = c.get("listed_ym") or ""
+    return ym[:4] if len(ym) >= 4 else "unknown"
+
+
+def year_label(y: str) -> str:
+    return "掲載時期不明" if y == "unknown" else f"{y}年掲載"
+
+
+def list_index(cfg: dict, by_year: dict) -> str:
+    items = "".join(f'<li><a href="{E(y)}/">{E(year_label(y))}</a> <span class="meta">{len(cs)}件</span></li>'
+                    for y, cs in by_year.items())
+    total = sum(len(cs) for cs in by_year.values())
+    body = f"""
+<nav class="crumb"><a href="../">トップ</a> › 掲載業者一覧</nav>
+<h1>掲載業者一覧</h1>
+<p class="lead">金融庁の「無登録で金融商品取引業を行う者」のリストに掲載されている業者({total}件)を、掲載年ごとに一覧にしています。</p>
+<ul class="related">{items}</ul>
+<p class="small">業者名・サービス名で探す場合は、<a href="../">トップページの検索</a>が便利です。掲載されていないからといって、安全な業者とは限りません。</p>
+"""
+    return layout(cfg, f"掲載業者一覧|{cfg['site_name']}", f"金融庁の無登録業者リストに掲載されている{total}件の業者を、掲載年ごとに一覧で確認できます。", "/list/", body, depth=1)
+
+
+def list_year(cfg: dict, y: str, cs: list, years: list) -> str:
+    rows = "".join(
+        f'<li><a href="../../c/{E(c["id"])}/">{E(display_name(c))}</a>'
+        + (f' <span class="meta">({E("、".join(c.get("services") or []))})</span>' if c.get("services") else "")
+        + f'<br><span class="meta">{E(ym_label(c.get("listed_ym"), c.get("listed")))}・{E(c.get("region", ""))}</span></li>'
+        for c in cs)
+    nav = " ".join(f'<a href="../{E(o)}/">{E(o if o != "unknown" else "不明")}</a>' if o != y else f"<strong>{E(o if o != 'unknown' else '不明')}</strong>" for o in years)
+    body = f"""
+<nav class="crumb"><a href="../../">トップ</a> › <a href="../">掲載業者一覧</a> › {E(year_label(y))}</nav>
+<h1>{E(year_label(y))}の無登録業者({len(cs)}件)</h1>
+<p class="lead">金融庁の無登録業者リストのうち、{E(year_label(y))}の業者の一覧です。新しい順に並んでいます。</p>
+<p class="small yearnav">{nav}</p>
+<ul class="related">{rows}</ul>
+<p class="small yearnav">{nav}</p>
+"""
+    desc = f"金融庁の無登録業者リストに{E(year_label(y))}の業者{len(cs)}件の一覧。業者名・サービス名・国内/海外の区分を掲載しています。"
+    return layout(cfg, f"{year_label(y)}の無登録業者一覧({len(cs)}件)|{cfg['site_name']}", desc, f"/list/{y}/", body, depth=2)
+
+
 def layout(cfg: dict, title: str, desc: str, path: str, body: str, depth: int, noindex: bool = False) -> str:
     rel = "../" * depth
     robots = '<meta name="robots" content="noindex,follow">\n' if noindex else ""
@@ -189,7 +231,8 @@ def layout(cfg: dict, title: str, desc: str, path: str, body: str, depth: int, n
 <meta property="og:type" content="website"><meta property="og:url" content="{E(canonical)}">
 <link rel="stylesheet" href="{rel}style.css">
 </head><body>
-<header class="top"><a class="brand" href="{rel}">{E(cfg['site_name'])}</a></header>
+<header class="top"><a class="brand" href="{rel}">{E(cfg['site_name'])}</a>
+<nav class="gnav"><a href="{rel}list/">掲載業者一覧</a><a href="{rel}guide/">よくある相談</a></nav></header>
 <main>{body}</main>
 <footer><p>出典:<a href="{E(cfg['source_page_url'])}" rel="nofollow noopener">金融庁「無登録で金融商品取引業を行う者の名称等について」</a>を加工して作成しています。
 本サイトは金融庁・警察とは関係のない個人運営の情報サイトです。</p>
@@ -234,7 +277,7 @@ def company_page(cfg: dict, c: dict, related: list, fetched: str) -> str:
     rel_html = "".join(f'<li><a href="../{E(r["id"])}/">{E(display_name(r))}</a></li>' for r in related)
 
     body = f"""
-<nav class="crumb"><a href="../../">トップ</a> › 業者情報</nav>
+<nav class="crumb"><a href="../../">トップ</a> › <a href="../../list/">掲載業者一覧</a> › <a href="../../list/{E(year_of(c))}/">{E(year_label(year_of(c)))}</a> › 業者情報</nav>
 <h1>{E(name)}</h1>
 {f'<p class="sub">サービス名:{E(services)}</p>' if services else ''}
 {lead}
@@ -272,6 +315,7 @@ def index_page(cfg: dict, companies: list, fetched: str, guides: list) -> str:
 <input id="q" type="search" placeholder="業者名・サービス名(例:Babafx)" autocomplete="off">
 <p id="count" class="small"></p>
 <ul id="results" class="results"></ul>
+<p class="small"><a href="list/">掲載業者の一覧(掲載年別)を見る</a></p>
 <h2>よくある相談</h2>
 <ul class="related">{guide_items}</ul>
 <h2>最近掲載された業者</h2>
@@ -352,6 +396,15 @@ def main():
     global GUIDES_FOR_COMPANY
     GUIDES_FOR_COMPANY = [g for g in guides if g["slug"] in ("mutouroku-toha", "shukkin-kyohi", "nijihigai", "touroku-kakunin")]
     (SITE / "index.html").write_text(index_page(cfg, active, fetched, guides), encoding="utf-8")
+    by_year: dict = {}
+    for c in sorted(active, key=lambda c: (c.get("listed_ym") or "", c["first_seen"]), reverse=True):
+        by_year.setdefault(year_of(c), []).append(c)
+    years = list(by_year.keys())
+    (SITE / "list").mkdir()
+    (SITE / "list" / "index.html").write_text(list_index(cfg, by_year), encoding="utf-8")
+    for y, cs in by_year.items():
+        (SITE / "list" / y).mkdir()
+        (SITE / "list" / y / "index.html").write_text(list_year(cfg, y, cs, years), encoding="utf-8")
     if guides:
         (SITE / "guide").mkdir()
         (SITE / "guide" / "index.html").write_text(guide_index(cfg, guides), encoding="utf-8")
@@ -367,7 +420,7 @@ def main():
         (d / "index.html").write_text(company_page(cfg, c, related_for(c, active), fetched), encoding="utf-8")
 
     base = cfg["base_url"].rstrip("/")
-    urls = [f"{base}/", f"{base}/about/"] + ([f"{base}/guide/"] if guides else []) + [f"{base}/guide/{g['slug']}/" for g in guides] + [f"{base}/c/{c['id']}/" for c in active]
+    urls = [f"{base}/", f"{base}/about/", f"{base}/list/"] + [f"{base}/list/{y}/" for y in years] + ([f"{base}/guide/"] if guides else []) + [f"{base}/guide/{g['slug']}/" for g in guides] + [f"{base}/c/{c['id']}/" for c in active]
     (SITE / "sitemap.xml").write_text(
         '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
         + "".join(f"<url><loc>{E(u)}</loc></url>\n" for u in urls) + "</urlset>\n", encoding="utf-8")
