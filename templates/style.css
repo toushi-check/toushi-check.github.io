@@ -3,7 +3,10 @@
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font-family:"Hiragino Sans","Noto Sans JP",system-ui,sans-serif;line-height:1.75;font-size:16px}
 a{color:var(--accent)}
-.top{border-bottom:1px solid var(--line);padding:12px 16px}
+.top{border-bottom:1px solid var(--line);padding:12px 16px;display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between}
+.gnav{display:flex;gap:16px;font-size:.9rem}
+.gnav a{color:var(--fg)}
+.yearnav a,.yearnav strong{display:inline-block;margin:0 .35em .2em 0}
 .brand{font-weight:700;text-decoration:none;color:var(--fg)}
 main{max-width:760px;margin:0 auto;padding:16px}
 h1{font-size:1.5rem;line-height:1.4;margin:.6em 0 .2em}
