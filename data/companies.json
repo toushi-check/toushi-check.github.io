@@ -1,5 +1,66 @@
 [
  {
+  "id": "f62cbabfb8",
+  "name": "eTakara",
+  "business": "インターネットを通じて、店頭デリバティブ取引の勧誘を行っていたもの",
+  "note": "当該業者が提供するサービス名称は「eTakara」である。",
+  "services": [
+   "eTakara"
+  ],
+  "listed": "令和8年11月",
+  "listed_ym": "2026-11",
+  "region": "国内",
+  "first_seen": "2026-11-26"
+ },
+ {
+  "id": "295f418a55",
+  "name": "Kizuna Capital、KizunaQuant、RikuCore",
+  "business": "ウェブサイト上に金融商品取引業を行う旨を表示したもの",
+  "note": "当該業者は、ウェブサイト上で「BNY Mellon Investment Management Japan Limited」、「バンクオブニューヨークメロン証券株式会社」、「第一種金融商品取引業」、「関東財務局長(金商)第147号」、「加入協会 日本証券業協会、一般社団法人金融先物取引業協会、一般社団法人第二種金融商品取引業協会」等と表示し、登録を受けた金融商品取引業者の商号や財務局の登録番号等を詐称していた。 なお、当該3業者のウェブサイト上の記載内容は極めて類似している。",
+  "services": [],
+  "listed": "令和8年11月",
+  "listed_ym": "2026-11",
+  "region": "国内",
+  "first_seen": "2026-11-26"
+ },
+ {
+  "id": "86ffa6d973",
+  "name": "不明(リクイドネット証券株式会社の商号等を詐称)",
+  "business": "受取証書上に金融商品取引業を行う旨を表示したもの",
+  "note": "当該業者は、受取証書上で「リクイドネット証券株式会社」、「関東財務局長(金商)第198号」と表示し、登録を受けた金融商品取引業者の商号や財務局の登録番号を詐称していた。",
+  "services": [],
+  "listed": "令和8年11月",
+  "listed_ym": "2026-11",
+  "region": "国内",
+  "first_seen": "2026-11-26"
+ },
+ {
+  "id": "616aed8a8d",
+  "name": "Ultima Markets (Mauritius) Ltd",
+  "business": "インターネットを通じて、店頭デリバティブ取引の勧誘を行っていたもの",
+  "note": "当該業者が提供するサービスの名称は「Ultima Markets」である。",
+  "services": [
+   "Ultima Markets"
+  ],
+  "listed": "令和8年11月",
+  "listed_ym": "2026-11",
+  "region": "海外",
+  "first_seen": "2026-11-26"
+ },
+ {
+  "id": "def4ebd668",
+  "name": "Fxverge Ltd",
+  "business": "インターネットを通じて、店頭デリバティブ取引の勧誘を行っていたもの",
+  "note": "当該業者が提供するサービスの名称は「Fxverge」である。 なお、当該業者との関係性は不明であるが、警告している以下の業者については所在地が同様もしくは酷似している。 ・「Capital Crest Ltd(キャピタルクレスト株式会社)」(令和8年7月22日付で警告) ・「IS6 Technologies Ltd」(令和8年7月22日付で警告) ・「Dynamix Ltd(ダイナミックス株式会社)」(令和8年2月25日付で警告) ・「Profit Pulse Ltd」(令和8年1月29日付で警告) ・「Bullfxo Ltd」(令和7年12月19日付で警告) ・「WM Markets Ltd」(令和7年11月27日付で警告) ・「Trade Tide Ltd」(令和7年8月28日付で警告) ・「Proxtrend Ltd」(令和7年6月20日付で警告) ・「Zenith Markets PLC」(令和7年6月20日付で警告) ・「DAM Group Ltd」(令和7年5月28日付で警告) ・「Fxonet Ltd」(令和7年3月26日付で警告) ・「Nakito SA」(令和7年3月26日付で警告) ・「Swift Trader Ltd」(令和6年12月26日付で警告) ・「ロバートソン・ファイナンス(Robertson Finance Inc.)」 (令和6年10月25日付で警告) ・「DataWave Tech Ltd」(令和6年7月24日付で警告)",
+  "services": [
+   "Fxverge"
+  ],
+  "listed": "令和8年11月",
+  "listed_ym": "2026-11",
+  "region": "海外",
+  "first_seen": "2026-11-26"
+ },
+ {
   "id": "e2cb7e0296",
   "name": "4CAPITAL MANAGEMENT合同会社",
   "business": "外国の法令に基づく集団投資スキーム持分の募集又は私募の取扱い及び投資一任契約の締結の媒介を行っていたもの",
